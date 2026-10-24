@@ -244,9 +244,19 @@ def create_env_file(
         env_content.append(f"{var}={value}")
         env_content.append("")  # Add a blank line after each variable for readability
 
-    env_file = path / env_filename
-    env_file.write_text("\n".join(env_content))
-    return env_file
+    original_path = path / env_filename
+    env_file = original_path
+    number = 1
+    while True:
+        try:
+            with env_file.open("x", encoding="utf-8") as file:
+                file.write("\n".join(env_content))
+            return env_file
+        except FileExistsError:
+            number += 1
+            env_file = original_path.with_name(
+                f"{original_path.stem}.{number}{original_path.suffix}"
+            )
 
 
 def parse_component_ref(

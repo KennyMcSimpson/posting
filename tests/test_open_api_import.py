@@ -192,6 +192,84 @@ def test_import_openapi_3_0_without_components_and_with_server_url(tmp_path: Pat
     assert "BASE_URL=https://api.example.com" in env_files[0].read_text()
 
 
+@pytest.mark.parametrize("version", ["3.0.3", "3.1.0"])
+@pytest.mark.parametrize(
+    "servers,env_filename,next_filename,third_filename",
+    [
+        ([], ".env", ".env.2", ".env.3"),
+        (
+            [{"url": "https://api.example.test"}],
+            "api_example_test.env",
+            "api_example_test.2.env",
+            "api_example_test.3.env",
+        ),
+    ],
+)
+def test_import_preserves_existing_environment_files(
+    tmp_path: Path,
+    version: str,
+    servers: list[dict[str, str]],
+    env_filename: str,
+    next_filename: str,
+    third_filename: str,
+):
+    spec = {
+        "openapi": version,
+        "info": {"title": "Test", "version": "1.0"},
+        "servers": servers,
+        "paths": {},
+    }
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_text(json.dumps(spec))
+    original = b"# Keep my settings\r\nTOKEN=secret\r\nBASE_URL=https://custom.test\r\n"
+    env_file = tmp_path / env_filename
+    env_file.write_bytes(original)
+
+    collection = import_openapi_spec(spec_path)
+
+    assert env_file.read_bytes() == original
+    imported_env = tmp_path / next_filename
+    assert imported_env.is_file()
+    assert "BASE_URL=" in imported_env.read_text()
+    assert f"`{next_filename}`" in collection.readme
+
+    imported_content = imported_env.read_bytes()
+    repeated_collection = import_openapi_spec(spec_path)
+
+    assert env_file.read_bytes() == original
+    assert imported_env.read_bytes() == imported_content
+    assert (tmp_path / third_filename).read_bytes() == imported_content
+    assert f"`{third_filename}`" in repeated_collection.readme
+
+
+@pytest.mark.parametrize("version", ["3.0.3", "3.1.0"])
+def test_import_keeps_servers_with_colliding_environment_filenames(
+    tmp_path: Path, version: str
+):
+    spec = {
+        "openapi": version,
+        "info": {"title": "Test", "version": "1.0"},
+        "servers": [
+            {"url": "https://api.example.test"},
+            {"url": "http://api.example.test"},
+        ],
+        "paths": {},
+    }
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_text(json.dumps(spec))
+
+    collection = import_openapi_spec(spec_path)
+
+    assert "BASE_URL=https://api.example.test" in (
+        tmp_path / "api_example_test.env"
+    ).read_text()
+    assert "BASE_URL=http://api.example.test" in (
+        tmp_path / "api_example_test.2.env"
+    ).read_text()
+    assert "`api_example_test.env`" in collection.readme
+    assert "`api_example_test.2.env`" in collection.readme
+
+
 def test_import_openapi_3_0_resolves_parameter_refs(tmp_path: Path):
     """Test importing referenced query and header parameters from components."""
     spec = {

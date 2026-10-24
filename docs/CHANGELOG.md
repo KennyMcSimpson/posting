@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Fixed
+
+- Preserve existing environment files when importing OpenAPI specs (#91).
+
 ## 2.11.2 [5th October 2026]
 
 ### Fixed
